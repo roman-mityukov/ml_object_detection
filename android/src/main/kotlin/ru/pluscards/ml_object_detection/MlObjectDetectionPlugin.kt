@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import ru.pluscards.ml_object_detection.model.Yolo
 import ru.pluscards.ml_object_detection.model.Yolov8
 import ru.pluscards.ml_object_detection.utils.Utils
 import java.nio.ByteBuffer
