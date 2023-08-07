@@ -39,13 +39,9 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
             InitErrorState() =>
               const Center(child: Text('Initialization error')),
             InitCompleteState() => Stack(
-                fit: StackFit.expand,
                 children: [
-                  AspectRatio(
-                    aspectRatio: state.cameraController.value.aspectRatio,
-                    child: CameraPreview(
-                      state.cameraController,
-                    ),
+                  CameraPreview(
+                    state.cameraController,
                   ),
                   BlocBuilder<VideoDetectionBloc, VideoDetectionState>(
                     buildWhen: (previous, current) {
@@ -53,14 +49,15 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
                     },
                     builder: (context, state) {
                       if (state is DetectCompleteState) {
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: displayBoxesAroundRecognizedObjects(
-                            MediaQuery.of(context).size,
-                            state.result,
-                            state.cameraImage,
-                          ),
-                        );
+                        return LayoutBuilder(builder: (context, constraints) {
+                          return Stack(
+                            children: _displayBoxesAroundRecognizedObjects(
+                              Size(constraints.maxWidth, constraints.maxHeight),
+                              state.result,
+                              state.cameraImage,
+                            ),
+                          );
+                        });
                       } else {
                         return const SizedBox.shrink();
                       }
@@ -77,14 +74,14 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
     );
   }
 
-  List<Widget> displayBoxesAroundRecognizedObjects(
-    Size screen,
+  List<Widget> _displayBoxesAroundRecognizedObjects(
+    Size size,
     List<Map<String, dynamic>> result,
     CameraImage cameraImage,
   ) {
     if (result.isEmpty) return [];
-    double factorX = screen.width / (cameraImage.height);
-    double factorY = screen.height / (cameraImage.width);
+    double factorX = size.width / (cameraImage.height);
+    double factorY = size.height / (cameraImage.width);
 
     Color colorPick = const Color.fromARGB(255, 50, 233, 30);
 

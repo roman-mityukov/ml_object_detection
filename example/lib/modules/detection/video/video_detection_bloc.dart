@@ -39,9 +39,9 @@ class DetectCompleteState extends VideoDetectionState {
 
 class VideoDetectionBloc
     extends Bloc<VideoDetectionEvent, VideoDetectionState> {
+  late final CameraController _cameraController;
   final _logger = Logger('VideoDetectionBloc');
   final MlObjectDetection _mlObjectDetection;
-  late final CameraController _cameraController;
 
   VideoDetectionBloc(this._mlObjectDetection) : super(IdleState()) {
     on<InitEvent>(_onInitEvent);
@@ -70,8 +70,14 @@ class VideoDetectionBloc
       );
 
       final cameras = await availableCameras();
-      _cameraController = CameraController(cameras[0], ResolutionPreset.medium);
+      _cameraController = CameraController(
+        cameras[0],
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
       await _cameraController.initialize();
+
+      _logger.fine('Camera is initialized. CameraController.value ${_cameraController.value}');
 
       _cameraController.startImageStream(
         (cameraImage) async {
@@ -84,7 +90,9 @@ class VideoDetectionBloc
             classThreshold: 0.5,
           );
 
-          add(DetectCompleteEvent(result, cameraImage));
+          if (!isClosed) {
+            add(DetectCompleteEvent(result, cameraImage));
+          }
         },
       );
 
