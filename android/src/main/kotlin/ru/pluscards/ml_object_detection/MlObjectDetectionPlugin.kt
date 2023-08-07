@@ -50,7 +50,6 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        Log.d(TAG, "call arguments ${call.arguments}")
         when (call.method) {
             "loadModel" -> {
                 try {
