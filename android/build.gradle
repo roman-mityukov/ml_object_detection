@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.0'
+        classpath 'com.android.tools.build:gradle:7.4.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -46,13 +46,13 @@ android {
     }
 
     dependencies {
-        implementation 'org.tensorflow:tensorflow-lite:2.10.0'
-        implementation 'org.tensorflow:tensorflow-lite-gpu:2.10.0'
-        implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.10.0'
-        implementation 'org.tensorflow:tensorflow-lite-support:0.4.3'
-        implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.11.0'
+        implementation 'org.tensorflow:tensorflow-lite:2.13.0'
+        implementation 'org.tensorflow:tensorflow-lite-gpu:2.13.0'
+        implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.13.0'
+        implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+        implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.13.0'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
-        testImplementation 'org.mockito:mockito-core:5.0.0'
+        testImplementation 'org.mockito:mockito-core:5.1.1'
     }
 
     testOptions {
