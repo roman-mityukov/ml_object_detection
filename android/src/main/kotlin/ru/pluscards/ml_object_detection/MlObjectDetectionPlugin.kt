@@ -1,8 +1,11 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package ru.pluscards.ml_object_detection
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.FlutterPlugin.FlutterAssets
 import io.flutter.plugin.common.MethodCall
@@ -20,6 +23,9 @@ private val empty = ArrayList<Map<String, Any>>()
 
 /** MlObjectDetectionPlugin */
 class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
+    companion object {
+        val TAG = "MlObjectDetectionPlugin"
+    }
     /// The MethodChannel that will the communication between Flutter and native Android
     ///
     /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -44,13 +50,14 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
+        Log.d(TAG, "call arguments ${call.arguments}")
         when (call.method) {
             "loadModel" -> {
                 try {
                     yolo = loadModel(call.arguments as Map<String, Any>)
                     result.success("ok")
                 } catch (e: Exception) {
-                    result.error("100", "Error on load Yolov5 model", e)
+                    result.error("100", "Error on load Yolo model", e)
                 }
             }
 
@@ -78,7 +85,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
         val useGpu = args["use_gpu"] as Boolean
         val rotation = args["rotation"] as Int
         val yolo: Yolo = Yolov8(
-            context,
+            context!!,
             modelPath,
             isAsset,
             numThreads,
@@ -129,7 +136,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
                     BitmapFactory.decodeByteArray(image, 0, image!!.size)
                 } else {
                     //rotate image, because android take a photo rotating 90 degrees
-                    Utils.feedInputToBitmap(context, frame, imageHeight, imageWidth, 90)
+                    Utils.feedInputToBitmap(context, frame!!, imageHeight, imageWidth, 90)
                 }
                 val shape = yolo.inputTensor.shape()
                 val sourceWidth = bitmap.width
