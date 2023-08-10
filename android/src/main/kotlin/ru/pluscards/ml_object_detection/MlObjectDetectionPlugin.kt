@@ -17,6 +17,8 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.media.ImageReader
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Surface
 import androidx.core.app.ActivityCompat
@@ -90,24 +92,24 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         context = flutterPluginBinding.applicationContext
         executor = Executors.newSingleThreadExecutor()
 
-        val timer = object : CountDownTimer(200000, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                eventSink?.success(
-                    listOf<Map<String, Any>>(
-                        hashMapOf(
-                            Pair(
-                                first = "tag",
-                                second = "mouse"
-                            ),
-                            Pair(first = "box", second = listOf(100f, 100f, 300f, 300f, 0.75f))
-                        )
-                    )
-                )
-            }
-
-            override fun onFinish() {}
-        }
-        timer.start()
+//        val timer = object : CountDownTimer(200000, 1000) {
+//            override fun onTick(millisUntilFinished: Long) {
+//                eventSink?.success(
+//                    listOf<Map<String, Any>>(
+//                        hashMapOf(
+//                            Pair(
+//                                first = "tag",
+//                                second = "mouse"
+//                            ),
+//                            Pair(first = "box", second = listOf(100f, 100f, 300f, 300f, 0.75f))
+//                        )
+//                    )
+//                )
+//            }
+//
+//            override fun onFinish() {}
+//        }
+//        timer.start()
     }
 
     private var cameraDevice: CameraDevice? = null
@@ -127,15 +129,12 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                 val surface = Surface(texture)
 
                 previewRequestBuilder.addTarget(surface)
-                previewRequestBuilder.set(
-                    CaptureRequest.FLASH_MODE,
-                    CaptureRequest.FLASH_MODE_TORCH
-                )
+                previewRequestBuilder.addTarget(this@MlObjectDetectionPlugin.imageReader!!.surface)
 
                 camera.createCaptureSession(
                     mutableListOf(
                         surface,
-                        this@MlObjectDetectionPlugin.imageReader?.surface
+                        this@MlObjectDetectionPlugin.imageReader!!.surface
                     ),
                     sessionCallback,
                     null
@@ -184,7 +183,32 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
     }
 
     private val onImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
-        Log.d("Hello", "asdf")
+        val image = reader.acquireLatestImage();
+
+        try {
+            if (!isDetecting) {
+
+                val buffer = image.planes[0].buffer;
+                val bytes = ByteArray(buffer.capacity())
+                buffer.get(bytes)
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                isDetecting = true
+                //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
+                val detectionTask = DetectionTask(yolo!!, bitmap, context!!) {
+                    val handler = Handler(Looper.getMainLooper())
+                    handler.post {
+                        isDetecting = false
+                        eventSink?.success(it)
+                    }
+                }
+                executor!!.submit(detectionTask)
+            }
+        } catch (e: java.lang.Exception) {
+            // no op
+            Log.d("Hello", "asdf")
+        }
+
+        image?.close()
     }
 
     private fun closeCamera() {
@@ -221,7 +245,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
 
                         imageReader = ImageReader.newInstance(
                             displayMetrics.widthPixels, displayMetrics.heightPixels,
-                            ImageFormat.YUV_420_888, /*maxImages*/ 2
+                            ImageFormat.JPEG, /*maxImages*/ 2
                         ).apply {
                             setOnImageAvailableListener(onImageAvailableListener, null)
                         }
@@ -280,44 +304,23 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
     //https://www.baeldung.com/java-single-thread-executor-service
     internal class DetectionTask(
         private val yolo: Yolo,
-        args: Map<String?, Any?>,
-        private var typing: String,
-        result: Result,
+        private val bitmap: Bitmap,
         private val context: Context,
-        private val callback: () -> Unit,
+        private val callback: (List<Map<String, Any>>) -> Unit,
     ) :
         Runnable {
-        private var image: ByteArray? = null
-        private var frame: List<ByteArray>? = null
-        private var imageHeight: Int
-        private var imageWidth: Int
         private var iouThreshold: Float
         private var confThreshold: Float
         private var classThreshold: Float
-        private val result: Result
 
         init {
-            if (typing === "img") {
-                image = args["bytesList"] as ByteArray?
-            } else {
-                frame = args["bytesList"] as List<ByteArray>
-            }
-            imageHeight = args["image_height"] as Int
-            imageWidth = args["image_width"] as Int
-            iouThreshold = (args["iou_threshold"] as Double).toFloat()
-            confThreshold = (args["conf_threshold"] as Double).toFloat()
-            classThreshold = (args["class_threshold"] as Double).toFloat()
-            this.result = result
+            iouThreshold = 0.4f
+            confThreshold = 0.4f
+            classThreshold = 0.5f
         }
 
         override fun run() {
             try {
-                val bitmap: Bitmap = if (typing === "img") {
-                    BitmapFactory.decodeByteArray(image, 0, image!!.size)
-                } else {
-                    //rotate image, because android take a photo rotating 90 degrees
-                    Utils.feedInputToBitmap(context, frame!!, imageHeight, imageWidth, 90)
-                }
                 val shape = yolo.inputTensor.shape()
                 val sourceWidth = bitmap.width
                 val sourceHeight = bitmap.height
@@ -333,44 +336,47 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                     confThreshold,
                     classThreshold
                 )
-                callback.invoke()
-                result.success(detections)
+                if (detections.isNotEmpty()) {
+                    Log.d(TAG, "detections size ${detections.size}")
+                    Log.d(TAG, "detections size ${detections.first()}")
+                }
+
+                callback.invoke(detections)
             } catch (e: java.lang.Exception) {
-                result.error("100", "Detection Error", e)
             }
         }
     }
 
     private fun onFrame(args: Map<String?, Any?>, result: Result) {
-        try {
-            if (isDetecting) {
-                result.success(empty)
-            } else {
-                isDetecting = true
-                val detectionTask = DetectionTask(yolo!!, args, "frame", result, context!!) {
-                    isDetecting = false
-                }
-                executor!!.submit(detectionTask)
-            }
-        } catch (e: java.lang.Exception) {
-            result.error("100", "Detection Error", e)
-        }
+//        try {
+//            if (isDetecting) {
+//                result.success(empty)
+//            } else {
+//                isDetecting = true
+//                val detectionTask = DetectionTask(yolo!!, args, "frame", result, context!!) {
+//                    isDetecting = false
+//                }
+//                executor!!.submit(detectionTask)
+//            }
+//        } catch (e: java.lang.Exception) {
+//            result.error("100", "Detection Error", e)
+//        }
     }
 
     private fun onImage(args: Map<String?, Any?>, result: Result) {
-        try {
-            if (isDetecting) {
-                result.success(empty)
-            } else {
-                isDetecting = true
-                val detectionTask = DetectionTask(yolo!!, args, "img", result, context!!) {
-                    isDetecting = false
-                }
-                executor!!.submit(detectionTask)
-            }
-        } catch (e: java.lang.Exception) {
-            result.error("100", "Detection Error", e)
-        }
+//        try {
+//            if (isDetecting) {
+//                result.success(empty)
+//            } else {
+//                isDetecting = true
+//                val detectionTask = DetectionTask(yolo!!, args, "img", result, context!!) {
+//                    isDetecting = false
+//                }
+//                executor!!.submit(detectionTask)
+//            }
+//        } catch (e: java.lang.Exception) {
+//            result.error("100", "Detection Error", e)
+//        }
     }
 
     private fun closeModel(result: Result) {

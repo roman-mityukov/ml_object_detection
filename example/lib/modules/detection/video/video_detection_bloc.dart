@@ -63,14 +63,14 @@ class VideoDetectionBloc
     try {
       emit(InitPendingState());
 
-      final textureId = await _mlObjectDetection.getTextureId();
-
       await _mlObjectDetection.loadModel(
         labels: 'assets/labels.txt',
         modelPath: 'assets/yolov8n.tflite',
         numThreads: 2,
         useGpu: true,
       );
+
+      final textureId = await _mlObjectDetection.getTextureId();
 
       // final cameras = await availableCameras();
       // _cameraController = CameraController(
@@ -117,6 +117,9 @@ class VideoDetectionBloc
       // );
 
       _mlObjectDetection.objectDetectionResult().listen((event) {
+        if (event.isNotEmpty) {
+          _logger.fine('event ${event.first}');
+        }
         add(DetectCompleteEvent(event));
       });
 
