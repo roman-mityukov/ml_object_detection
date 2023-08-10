@@ -2,12 +2,27 @@
 
 package ru.pluscards.ml_object_detection
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.media.ImageReader
+import android.os.CountDownTimer
 import android.util.Log
+import android.view.Surface
+import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.FlutterPlugin.FlutterAssets
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -22,15 +37,18 @@ import java.util.concurrent.Executors
 private val empty = ArrayList<Map<String, Any>>()
 
 /** MlObjectDetectionPlugin */
-class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
+class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
     companion object {
         val TAG = "MlObjectDetectionPlugin"
     }
+
     /// The MethodChannel that will the communication between Flutter and native Android
     ///
     /// This local reference serves to register the plugin with the Flutter Engine and unregister it
     /// when the Flutter Engine is detached from the Activity
-    private lateinit var channel: MethodChannel
+    private lateinit var methodChannel: MethodChannel
+    private lateinit var surfaceTexture: SurfaceTexture
+    private var textureId: Long = -1
     private var context: Context? = null
     private var assets: FlutterAssets? = null
     private var yolo: Yolo? = null
@@ -39,18 +57,181 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
 
     private var isDetecting = false
 
+    private var eventChannel: EventChannel? = null
+    private var eventSink: EventChannel.EventSink? = null
+
+    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        this.eventSink = events
+    }
+
+    override fun onCancel(arguments: Any?) {
+        this.eventSink = null
+    }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "ml_object_detection")
-        channel.setMethodCallHandler(this)
+        val entry = flutterPluginBinding.textureRegistry.createSurfaceTexture()
+        textureId = entry.id()
+        surfaceTexture = entry.surfaceTexture()
+
+//        flutterPluginBinding.platformViewRegistry.registerViewFactory(
+//            "MlPreviewWidget",
+//            MlPreviewFactory(surfaceTexture)
+//        )
+
+        methodChannel =
+            MethodChannel(flutterPluginBinding.binaryMessenger, "ml_object_detection_method")
+        methodChannel.setMethodCallHandler(this)
+
+        eventChannel =
+            EventChannel(flutterPluginBinding.binaryMessenger, "ml_object_detection_stream")
+        eventChannel?.setStreamHandler(this)
 
         assets = flutterPluginBinding.flutterAssets
         context = flutterPluginBinding.applicationContext
         executor = Executors.newSingleThreadExecutor()
+
+        val timer = object : CountDownTimer(200000, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                eventSink?.success(
+                    listOf<Map<String, Any>>(
+                        hashMapOf(
+                            Pair(
+                                first = "tag",
+                                second = "mouse"
+                            ),
+                            Pair(first = "box", second = listOf(100f, 100f, 300f, 300f, 0.75f))
+                        )
+                    )
+                )
+            }
+
+            override fun onFinish() {}
+        }
+        timer.start()
+    }
+
+    private var cameraDevice: CameraDevice? = null
+    private lateinit var previewRequestBuilder: CaptureRequest.Builder
+    private var imageReader: ImageReader? = null
+    private lateinit var previewRequest: CaptureRequest
+
+    private val cameraStateCallback = object : CameraDevice.StateCallback() {
+        override fun onOpened(camera: CameraDevice) {
+            try {
+                cameraDevice = camera
+                previewRequestBuilder =
+                    camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+
+                val texture = this@MlObjectDetectionPlugin.surfaceTexture
+                texture.setDefaultBufferSize(1280, 720)
+                val surface = Surface(texture)
+
+                previewRequestBuilder.addTarget(surface)
+                previewRequestBuilder.set(
+                    CaptureRequest.FLASH_MODE,
+                    CaptureRequest.FLASH_MODE_TORCH
+                )
+
+                camera.createCaptureSession(
+                    mutableListOf(
+                        surface,
+                        this@MlObjectDetectionPlugin.imageReader?.surface
+                    ),
+                    sessionCallback,
+                    null
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                closeCamera()
+            }
+        }
+
+        override fun onDisconnected(camera: CameraDevice) {
+            closeCamera()
+        }
+
+        override fun onError(camera: CameraDevice, error: Int) {
+            onDisconnected(camera)
+        }
+    }
+
+    private var captureSession: CameraCaptureSession? = null
+
+    private val sessionCallback = object : CameraCaptureSession.StateCallback() {
+        override fun onConfigureFailed(session: CameraCaptureSession) {
+            Log.d("Hello", "error")
+        }
+
+        override fun onConfigured(session: CameraCaptureSession) {
+
+            if (cameraDevice == null) return
+
+            captureSession = session
+
+            try {
+                // Auto focus should be continuous for camera preview.
+                previewRequestBuilder.set(
+                    CaptureRequest.CONTROL_AF_MODE,
+                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+                )
+
+                previewRequest = previewRequestBuilder.build()
+                session.setRepeatingRequest(previewRequest, null, null)
+            } catch (e: CameraAccessException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private val onImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
+        Log.d("Hello", "asdf")
+    }
+
+    private fun closeCamera() {
+
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
+            "getTextureId" -> {
+                result.success(textureId)
+
+                val cameraManager =
+                    context!!.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                cameraManager.cameraIdList.forEach {
+                    val characteristic = cameraManager.getCameraCharacteristics(it)
+
+                    if (characteristic[CameraCharacteristics.FLASH_INFO_AVAILABLE] == true) {
+                        if (ActivityCompat.checkSelfPermission(
+                                context!!,
+                                Manifest.permission.CAMERA
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            // TODO: Consider calling
+                            //    ActivityCompat#requestPermissions
+                            // here to request the missing permissions, and then overriding
+                            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                            //                                          int[] grantResults)
+                            // to handle the case where the user grants the permission. See the documentation
+                            // for ActivityCompat#requestPermissions for more details.
+                            return
+                        }
+                        cameraManager.openCamera(it, this.cameraStateCallback, null)
+                        val displayMetrics = this.context!!.resources.displayMetrics
+
+                        imageReader = ImageReader.newInstance(
+                            displayMetrics.widthPixels, displayMetrics.heightPixels,
+                            ImageFormat.YUV_420_888, /*maxImages*/ 2
+                        ).apply {
+                            setOnImageAvailableListener(onImageAvailableListener, null)
+                        }
+                        return@forEach
+                    }
+                }
+
+
+            }
+
             "loadModel" -> {
                 try {
                     yolo = loadModel(call.arguments as Map<String, Any>)
@@ -202,7 +383,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
+        methodChannel.setMethodCallHandler(null)
         context = null
         assets = null
         executor?.shutdown()

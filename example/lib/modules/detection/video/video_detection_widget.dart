@@ -1,6 +1,8 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:logging/logging.dart';
+import 'package:ml_object_detection/ml_preview_widget.dart';
 import 'package:ml_object_detection_example/modules/detection/video/video_detection_bloc.dart';
 
 class VideoDetectionWidget extends StatefulWidget {
@@ -11,6 +13,8 @@ class VideoDetectionWidget extends StatefulWidget {
 }
 
 class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
+  final _logger = Logger('_VideoDetectionWidgetState');
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -39,10 +43,11 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
             InitErrorState() =>
               const Center(child: Text('Initialization error')),
             InitCompleteState() => Stack(
+                fit: StackFit.expand,
                 children: [
-                  CameraPreview(
-                    state.cameraController,
-                  ),
+                  ColoredBox(color: Colors.red),
+                  MlPreviewWidget(state.textureId),
+
                   BlocBuilder<VideoDetectionBloc, VideoDetectionState>(
                     buildWhen: (previous, current) {
                       return current is DetectCompleteState;
@@ -54,7 +59,6 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
                             children: _displayBoxesAroundRecognizedObjects(
                               Size(constraints.maxWidth, constraints.maxHeight),
                               state.result,
-                              state.cameraImage,
                             ),
                           );
                         });
@@ -77,27 +81,32 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
   List<Widget> _displayBoxesAroundRecognizedObjects(
     Size size,
     List<Map<String, dynamic>> result,
-    CameraImage cameraImage,
   ) {
     if (result.isEmpty) return [];
-    double factorX = size.width / (cameraImage.height);
-    double factorY = size.height / (cameraImage.width);
+    double factorX = size.width / (1920);
+    double factorY = size.height / (1080);
 
     Color colorPick = const Color.fromARGB(255, 50, 233, 30);
 
     return result.map((result) {
+      double left = result["box"][0] * factorX;
+      double top = result["box"][1] * factorY;
+      double width = (result["box"][2] - result["box"][0]) * factorX;
+      double height = (result["box"][3] - result["box"][1]) * factorY;
+      String label = result['tag'];
+
       return Positioned(
-        left: result["box"][0] * factorX,
-        top: result["box"][1] * factorY,
-        width: (result["box"][2] - result["box"][0]) * factorX,
-        height: (result["box"][3] - result["box"][1]) * factorY,
+        left: left,
+        top: top,
+        width: width,
+        height: height,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.all(Radius.circular(10.0)),
             border: Border.all(color: Colors.pink, width: 2.0),
           ),
           child: Text(
-            "${result['tag']} ${(result['box'][4] * 100).toStringAsFixed(0)}%",
+            "$label ${(result['box'][4] * 100).toStringAsFixed(0)}%",
             style: TextStyle(
               background: Paint()..color = colorPick,
               color: Colors.white,

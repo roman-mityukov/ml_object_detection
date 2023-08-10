@@ -7,7 +7,31 @@ import 'ml_object_detection_platform_interface.dart';
 class MethodChannelMlObjectDetection extends MlObjectDetectionPlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
-  final methodChannel = const MethodChannel('ml_object_detection');
+  final methodChannel = const MethodChannel('ml_object_detection_method');
+
+  final eventChannel = const EventChannel('ml_object_detection_stream');
+
+  @override
+  Stream<List<Map<String, Object>>> objectDetectionResult() async* {
+    await for (List<Object?> result in eventChannel.receiveBroadcastStream()) {
+      final detectionResult = <Map<String, Object>>[];
+      for (final dynamic concreteResult in result) {
+        detectionResult.add(
+          {
+            'tag': concreteResult['tag'] as String,
+            'box': (concreteResult['box'] as List<dynamic>).map((e) => e as double).toList()
+          },
+        );
+      }
+      yield detectionResult;
+    }
+  }
+
+  @override
+  Future<int> getTextureId() async {
+    final result = await methodChannel.invokeMethod<int>('getTextureId');
+    return result!;
+  }
 
   @override
   Future<void> loadModel({

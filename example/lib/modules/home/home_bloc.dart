@@ -37,7 +37,7 @@ class NavigateToDestinationState extends HomeState {
 }
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc() : super(IdleHomeState(HomeRoute.values)) {
+  HomeBloc() : super(IdleHomeState(const [HomeRoute.video])) {
     on<SelectRouteEvent>(_onSelectRouteEvent);
   }
 

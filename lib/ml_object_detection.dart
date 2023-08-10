@@ -3,6 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'ml_object_detection_platform_interface.dart';
 
 class MlObjectDetection {
+  Future<int> getTextureId() {
+    return MlObjectDetectionPlatform.instance.getTextureId();
+  }
+
+  Stream<List<Map<String, Object>>> objectDetectionResult() {
+    return MlObjectDetectionPlatform.instance.objectDetectionResult();
+  }
+
   Future<void> loadModel({
     required String modelPath,
     required String labels,

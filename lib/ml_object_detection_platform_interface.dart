@@ -24,6 +24,10 @@ abstract class MlObjectDetectionPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  Stream<List<Map<String, Object>>> objectDetectionResult();
+
+  Future<int> getTextureId();
+
   /// load YOLO model from the assets folder
   ///
   /// args: [modelPath] - path to the model file

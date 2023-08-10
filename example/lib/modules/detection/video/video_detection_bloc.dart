@@ -11,9 +11,8 @@ class InitEvent implements VideoDetectionEvent {}
 
 class DetectCompleteEvent implements VideoDetectionEvent {
   final List<Map<String, dynamic>> result;
-  final CameraImage cameraImage;
 
-  DetectCompleteEvent(this.result, this.cameraImage);
+  DetectCompleteEvent(this.result);
 }
 
 sealed class VideoDetectionState {}
@@ -23,18 +22,17 @@ class IdleState extends VideoDetectionState {}
 class InitPendingState extends VideoDetectionState {}
 
 class InitCompleteState extends VideoDetectionState {
-  final CameraController cameraController;
+  final int textureId;
 
-  InitCompleteState(this.cameraController);
+  InitCompleteState(this.textureId);
 }
 
 class InitErrorState extends VideoDetectionState {}
 
 class DetectCompleteState extends VideoDetectionState {
   final List<Map<String, dynamic>> result;
-  final CameraImage cameraImage;
 
-  DetectCompleteState(this.result, this.cameraImage);
+  DetectCompleteState(this.result);
 }
 
 class VideoDetectionBloc
@@ -56,12 +54,17 @@ class VideoDetectionBloc
     await _cameraController.dispose();
   }
 
+  int _counter = 0;
+
   Future<void> _onInitEvent(
     InitEvent event,
     Emitter<VideoDetectionState> emit,
   ) async {
     try {
       emit(InitPendingState());
+
+      final textureId = await _mlObjectDetection.getTextureId();
+
       await _mlObjectDetection.loadModel(
         labels: 'assets/labels.txt',
         modelPath: 'assets/yolov8n.tflite',
@@ -69,34 +72,55 @@ class VideoDetectionBloc
         useGpu: true,
       );
 
-      final cameras = await availableCameras();
-      _cameraController = CameraController(
-        cameras[0],
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      await _cameraController.initialize();
+      // final cameras = await availableCameras();
+      // _cameraController = CameraController(
+      //   cameras[0],
+      //   ResolutionPreset.high,
+      //   enableAudio: false,
+      // );
+      // await _cameraController.initialize();
+      //
+      // _logger.fine(
+      //     'Camera is initialized. CameraController.value ${_cameraController.value}');
+      //
+      // _cameraController.startImageStream(
+      //   (cameraImage) async {
+      //     final stopwatch = Stopwatch()..start();
+      //     final results = await _mlObjectDetection.onFrame(
+      //       bytesList: cameraImage.planes.map((plane) => plane.bytes).toList(),
+      //       imageHeight: cameraImage.height,
+      //       imageWidth: cameraImage.width,
+      //       iouThreshold: 0.4,
+      //       confThreshold: 0.4,
+      //       classThreshold: 0.5,
+      //     );
+      //
+      //     stopwatch.stop();
+      //     if (results.isNotEmpty) {
+      //       _counter = 0;
+      //       String logMessage = 'elapsed ${stopwatch.elapsed.inMilliseconds} ';
+      //       for(final concreteResult in results) {
+      //         logMessage = '${logMessage}result: tag ${concreteResult['tag']}, confidence ${(concreteResult['box'][4] * 100).toStringAsFixed(0)} ';
+      //       }
+      //       _logger.fine(logMessage);
+      //     }
+      //
+      //     if (results.isEmpty) {
+      //       _counter++;
+      //     }
+      //
+      //     if (!isClosed && (results.isNotEmpty || _counter > 20)) {
+      //       _counter = 0;
+      //       add(DetectCompleteEvent(results, cameraImage));
+      //     }
+      //   },
+      // );
 
-      _logger.fine('Camera is initialized. CameraController.value ${_cameraController.value}');
+      _mlObjectDetection.objectDetectionResult().listen((event) {
+        add(DetectCompleteEvent(event));
+      });
 
-      _cameraController.startImageStream(
-        (cameraImage) async {
-          final result = await _mlObjectDetection.onFrame(
-            bytesList: cameraImage.planes.map((plane) => plane.bytes).toList(),
-            imageHeight: cameraImage.height,
-            imageWidth: cameraImage.width,
-            iouThreshold: 0.4,
-            confThreshold: 0.4,
-            classThreshold: 0.5,
-          );
-
-          if (!isClosed) {
-            add(DetectCompleteEvent(result, cameraImage));
-          }
-        },
-      );
-
-      emit(InitCompleteState(_cameraController));
+      emit(InitCompleteState(textureId));
     } catch (error, stackTrace) {
       _logger.warning('Init error', error, stackTrace);
       emit(InitErrorState());
@@ -107,6 +131,6 @@ class VideoDetectionBloc
     DetectCompleteEvent event,
     Emitter<VideoDetectionState> emit,
   ) async {
-    emit(DetectCompleteState(event.result, event.cameraImage));
+    emit(DetectCompleteState(event.result));
   }
 }
