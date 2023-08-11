@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:ml_object_detection_example/modules/detection/image/image_detection_bloc.dart';
-import 'package:ml_object_detection_example/modules/detection/image/image_detection_widget.dart';
 import 'package:ml_object_detection_example/modules/detection/video/video_detection_bloc.dart';
 import 'package:ml_object_detection_example/modules/detection/video/video_detection_widget.dart';
 import 'package:ml_object_detection_example/modules/home/home_bloc.dart';
@@ -38,15 +36,6 @@ class HomeWidget extends StatelessWidget {
         listener: (context, state) {
           if (state is NavigateToDestinationState) {
             final route = switch (state.route) {
-              HomeRoute.image => CupertinoPageRoute(
-                  builder: (context) {
-                    return BlocProvider(
-                      create: (context) =>
-                          ImageDetectionBloc(context.read(), context.read()),
-                      child: const ImageDetectionWidget(),
-                    );
-                  },
-                ),
               HomeRoute.video => CupertinoPageRoute(
                   builder: (context) {
                     return BlocProvider(

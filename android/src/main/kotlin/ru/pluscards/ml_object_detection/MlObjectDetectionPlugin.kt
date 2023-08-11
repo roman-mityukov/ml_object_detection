@@ -2,33 +2,23 @@
 
 package ru.pluscards.ml_object_detection
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
+import android.graphics.Matrix
 import android.graphics.SurfaceTexture
-import android.hardware.camera2.CameraAccessException
-import android.hardware.camera2.CameraCaptureSession
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraDevice
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
-import android.media.ImageReader
-import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import android.view.Surface
-import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.FlutterPlugin.FlutterAssets
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import ru.pluscards.ml_object_detection.camera.CameraService
 import ru.pluscards.ml_object_detection.model.Yolo
 import ru.pluscards.ml_object_detection.model.Yolov8
 import ru.pluscards.ml_object_detection.utils.Utils
@@ -36,10 +26,8 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-private val empty = ArrayList<Map<String, Any>>()
-
 /** MlObjectDetectionPlugin */
-class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
+class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler, ActivityAware {
     companion object {
         val TAG = "MlObjectDetectionPlugin"
     }
@@ -62,6 +50,8 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
     private var eventChannel: EventChannel? = null
     private var eventSink: EventChannel.EventSink? = null
 
+    private lateinit var cameraService: CameraService
+
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         this.eventSink = events
     }
@@ -75,11 +65,6 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         textureId = entry.id()
         surfaceTexture = entry.surfaceTexture()
 
-//        flutterPluginBinding.platformViewRegistry.registerViewFactory(
-//            "MlPreviewWidget",
-//            MlPreviewFactory(surfaceTexture)
-//        )
-
         methodChannel =
             MethodChannel(flutterPluginBinding.binaryMessenger, "ml_object_detection_method")
         methodChannel.setMethodCallHandler(this)
@@ -91,233 +76,89 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         assets = flutterPluginBinding.flutterAssets
         context = flutterPluginBinding.applicationContext
         executor = Executors.newSingleThreadExecutor()
-
-//        val timer = object : CountDownTimer(200000, 1000) {
-//            override fun onTick(millisUntilFinished: Long) {
-//                eventSink?.success(
-//                    listOf<Map<String, Any>>(
-//                        hashMapOf(
-//                            Pair(
-//                                first = "tag",
-//                                second = "mouse"
-//                            ),
-//                            Pair(first = "box", second = listOf(100f, 100f, 300f, 300f, 0.75f))
-//                        )
-//                    )
-//                )
-//            }
-//
-//            override fun onFinish() {}
-//        }
-//        timer.start()
-    }
-
-    private var cameraDevice: CameraDevice? = null
-    private lateinit var previewRequestBuilder: CaptureRequest.Builder
-    private var imageReader: ImageReader? = null
-    private lateinit var previewRequest: CaptureRequest
-
-    private val cameraStateCallback = object : CameraDevice.StateCallback() {
-        override fun onOpened(camera: CameraDevice) {
-            try {
-                cameraDevice = camera
-                previewRequestBuilder =
-                    camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-
-                val texture = this@MlObjectDetectionPlugin.surfaceTexture
-                texture.setDefaultBufferSize(1280, 720)
-                val surface = Surface(texture)
-
-                previewRequestBuilder.addTarget(surface)
-                previewRequestBuilder.addTarget(this@MlObjectDetectionPlugin.imageReader!!.surface)
-
-                camera.createCaptureSession(
-                    mutableListOf(
-                        surface,
-                        this@MlObjectDetectionPlugin.imageReader!!.surface
-                    ),
-                    sessionCallback,
-                    null
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-                closeCamera()
-            }
-        }
-
-        override fun onDisconnected(camera: CameraDevice) {
-            closeCamera()
-        }
-
-        override fun onError(camera: CameraDevice, error: Int) {
-            onDisconnected(camera)
-        }
-    }
-
-    private var captureSession: CameraCaptureSession? = null
-
-    private val sessionCallback = object : CameraCaptureSession.StateCallback() {
-        override fun onConfigureFailed(session: CameraCaptureSession) {
-            Log.d("Hello", "error")
-        }
-
-        override fun onConfigured(session: CameraCaptureSession) {
-
-            if (cameraDevice == null) return
-
-            captureSession = session
-
-            try {
-                // Auto focus should be continuous for camera preview.
-                previewRequestBuilder.set(
-                    CaptureRequest.CONTROL_AF_MODE,
-                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
-                )
-
-                previewRequest = previewRequestBuilder.build()
-                session.setRepeatingRequest(previewRequest, null, null)
-            } catch (e: CameraAccessException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private val onImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
-        val image = reader.acquireLatestImage();
-
-        try {
-            if (!isDetecting) {
-
-                val buffer = image.planes[0].buffer;
-                val bytes = ByteArray(buffer.capacity())
-                buffer.get(bytes)
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
-                isDetecting = true
-                //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
-                val detectionTask = DetectionTask(yolo!!, bitmap, context!!) {
-                    val handler = Handler(Looper.getMainLooper())
-                    handler.post {
-                        isDetecting = false
-                        eventSink?.success(it)
-                    }
-                }
-                executor!!.submit(detectionTask)
-            }
-        } catch (e: java.lang.Exception) {
-            // no op
-            Log.d("Hello", "asdf")
-        }
-
-        image?.close()
-    }
-
-    private fun closeCamera() {
-
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
-            "getTextureId" -> {
-                result.success(textureId)
-
-                val cameraManager =
-                    context!!.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-                cameraManager.cameraIdList.forEach {
-                    val characteristic = cameraManager.getCameraCharacteristics(it)
-
-                    if (characteristic[CameraCharacteristics.FLASH_INFO_AVAILABLE] == true) {
-                        if (ActivityCompat.checkSelfPermission(
-                                context!!,
-                                Manifest.permission.CAMERA
-                            ) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            // TODO: Consider calling
-                            //    ActivityCompat#requestPermissions
-                            // here to request the missing permissions, and then overriding
-                            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                            //                                          int[] grantResults)
-                            // to handle the case where the user grants the permission. See the documentation
-                            // for ActivityCompat#requestPermissions for more details.
-                            return
-                        }
-                        cameraManager.openCamera(it, this.cameraStateCallback, null)
-                        val displayMetrics = this.context!!.resources.displayMetrics
-
-                        imageReader = ImageReader.newInstance(
-                            displayMetrics.widthPixels, displayMetrics.heightPixels,
-                            ImageFormat.JPEG, /*maxImages*/ 2
-                        ).apply {
-                            setOnImageAvailableListener(onImageAvailableListener, null)
-                        }
-                        return@forEach
-                    }
-                }
-
-
-            }
-
-            "loadModel" -> {
+            "init" -> {
                 try {
-                    yolo = loadModel(call.arguments as Map<String, Any>)
-                    result.success("ok")
+                    val args = call.arguments as Map<String, Any>
+
+                    val labelPath = assets!!.getAssetFilePathByName(args["classes_path"].toString())
+                    val modelPath = assets!!.getAssetFilePathByName(args["model_path"].toString())
+                    val isAsset = if (args["is_asset"] == null) false else args["is_asset"] as Boolean
+                    val previewWidth = args["preview_width"] as Int
+                    val previewHeight = args["preview_height"] as Int
+                    val numThreads = args["num_threads"] as Int
+                    val useGpu = args["use_gpu"] as Boolean
+
+                    yolo = Yolov8(
+                        context!!,
+                        modelPath,
+                        isAsset,
+                        numThreads,
+                        useGpu,
+                        labelPath
+                    )
+                    yolo!!.initModel()
+
+                    cameraService = CameraService(context!!, previewWidth, previewHeight, surfaceTexture, activityPluginBinding!!) {
+                        if (!isDetecting) {
+                            val buffer = it.planes[0].buffer
+                            val bytes = ByteArray(buffer.capacity())
+                            buffer.get(bytes)
+                            var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                            val matrix = Matrix()
+                            matrix.postRotate(90f)
+                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+//                        val path = "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
+//                        File(path).mkdir()
+//                        val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
+//                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+
+                            isDetecting = true
+                            //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
+                            val detectionTask = DetectionTask(yolo!!, bitmap) {
+                                val handler = Handler(Looper.getMainLooper())
+                                handler.post {
+                                    isDetecting = false
+                                    eventSink?.success(it)
+                                }
+                            }
+                            executor!!.submit(detectionTask)
+                        }
+                    }
+                    cameraService.init()
+
+                    result.success(textureId)
                 } catch (e: Exception) {
-                    result.error("100", "Error on load Yolo model", e)
+                    result.error("100", "Error on plugin initialization", e)
                 }
             }
 
-            "onFrame" -> {
-                onFrame(call.arguments as Map<String?, Any?>, result)
-            }
-
-            "onImage" -> {
-                onImage(call.arguments as Map<String?, Any?>, result)
-            }
-
-            "closeModel" -> {
-                closeModel(result)
+            "deinit" -> {
+                try {
+                    yolo!!.close()
+                    result.success("Yolo model closed succesfully")
+                } catch (e: java.lang.Exception) {
+                    result.error("100", "Close_yolo_model error", e)
+                }
             }
 
             else -> result.notImplemented()
         }
     }
 
-    private fun loadModel(args: Map<String, Any>): Yolo {
-        val labelPath = assets!!.getAssetFilePathByName(args["label_path"].toString())
-        val modelPath = assets!!.getAssetFilePathByName(args["model_path"].toString())
-        val isAsset = if (args["is_asset"] == null) false else args["is_asset"] as Boolean
-        val numThreads = args["num_threads"] as Int
-        val useGpu = args["use_gpu"] as Boolean
-        val rotation = args["rotation"] as Int
-        val yolo: Yolo = Yolov8(
-            context!!,
-            modelPath,
-            isAsset,
-            numThreads,
-            useGpu,
-            labelPath,
-            rotation
-        )
-        yolo.initModel()
-        return yolo
-    }
-
-    //https://www.baeldung.com/java-single-thread-executor-service
     internal class DetectionTask(
         private val yolo: Yolo,
         private val bitmap: Bitmap,
-        private val context: Context,
         private val callback: (List<Map<String, Any>>) -> Unit,
     ) :
         Runnable {
-        private var iouThreshold: Float
-        private var confThreshold: Float
-        private var classThreshold: Float
-
-        init {
-            iouThreshold = 0.4f
-            confThreshold = 0.4f
-            classThreshold = 0.5f
-        }
+        private var iouThreshold: Float = 0.4f
+        private var confThreshold: Float = 0.4f
+        private var classThreshold: Float = 0.5f
 
         override fun run() {
             try {
@@ -326,7 +167,12 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                 val sourceHeight = bitmap.height
                 val byteBuffer: ByteBuffer = Utils.feedInputTensor(
                     bitmap,
-                    shape[1], shape[2], sourceWidth, sourceHeight, 0f, 255f
+                    shape[1],
+                    shape[2],
+                    sourceWidth,
+                    sourceHeight,
+                    0f,
+                    255f
                 )
                 val detections: List<Map<String, Any>> = yolo.detectTask(
                     byteBuffer,
@@ -336,55 +182,11 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                     confThreshold,
                     classThreshold
                 )
-                if (detections.isNotEmpty()) {
-                    Log.d(TAG, "detections size ${detections.size}")
-                    Log.d(TAG, "detections size ${detections.first()}")
-                }
 
                 callback.invoke(detections)
             } catch (e: java.lang.Exception) {
+                // no op
             }
-        }
-    }
-
-    private fun onFrame(args: Map<String?, Any?>, result: Result) {
-//        try {
-//            if (isDetecting) {
-//                result.success(empty)
-//            } else {
-//                isDetecting = true
-//                val detectionTask = DetectionTask(yolo!!, args, "frame", result, context!!) {
-//                    isDetecting = false
-//                }
-//                executor!!.submit(detectionTask)
-//            }
-//        } catch (e: java.lang.Exception) {
-//            result.error("100", "Detection Error", e)
-//        }
-    }
-
-    private fun onImage(args: Map<String?, Any?>, result: Result) {
-//        try {
-//            if (isDetecting) {
-//                result.success(empty)
-//            } else {
-//                isDetecting = true
-//                val detectionTask = DetectionTask(yolo!!, args, "img", result, context!!) {
-//                    isDetecting = false
-//                }
-//                executor!!.submit(detectionTask)
-//            }
-//        } catch (e: java.lang.Exception) {
-//            result.error("100", "Detection Error", e)
-//        }
-    }
-
-    private fun closeModel(result: Result) {
-        try {
-            yolo!!.close()
-            result.success("Yolo model closed succesfully")
-        } catch (e: java.lang.Exception) {
-            result.error("100", "Close_yolo_model error", e)
         }
     }
 
@@ -394,5 +196,23 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         assets = null
         executor?.shutdown()
         yolo?.close()
+    }
+
+    private var activityPluginBinding: ActivityPluginBinding? = null
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activityPluginBinding = binding
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activityPluginBinding = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activityPluginBinding = binding
+    }
+
+    override fun onDetachedFromActivity() {
+        activityPluginBinding = null
     }
 }

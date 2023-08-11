@@ -10,9 +10,8 @@ class Yolov8(
     isAssets: Boolean,
     numThreads: Int,
     useGpu: Boolean,
-    labelPath: String,
-    rotation: Int
-) : Yolo(context, modelPath, isAssets, numThreads, useGpu, labelPath, rotation) {
+    labelPath: String
+) : Yolo(context, modelPath, isAssets, numThreads, useGpu, labelPath) {
     override fun filterBox(
         modelOutputs: Array<Array<FloatArray>>,
         iouThreshold: Float,

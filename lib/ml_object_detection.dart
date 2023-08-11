@@ -1,67 +1,29 @@
-import 'package:flutter/foundation.dart';
-
 import 'ml_object_detection_platform_interface.dart';
 
 class MlObjectDetection {
-  Future<int> getTextureId() {
-    return MlObjectDetectionPlatform.instance.getTextureId();
+  Stream<List<Map<String, Object>>> detections() {
+    return MlObjectDetectionPlatform.instance.detections();
   }
 
-  Stream<List<Map<String, Object>>> objectDetectionResult() {
-    return MlObjectDetectionPlatform.instance.objectDetectionResult();
-  }
-
-  Future<void> loadModel({
+  Future<int> init({
     required String modelPath,
-    required String labels,
+    required String classesPath,
+    required int previewWidth,
+    required int previewHeight,
     int? numThreads,
     bool? useGpu,
   }) async {
-    return MlObjectDetectionPlatform.instance.loadModel(
+    return MlObjectDetectionPlatform.instance.init(
       modelPath: modelPath,
-      labels: labels,
+      classesPath: classesPath,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
       numThreads: numThreads,
       useGpu: useGpu,
     );
   }
 
-  Future<List<Map<String, dynamic>>> onFrame({
-    required List<Uint8List> bytesList,
-    required int imageHeight,
-    required int imageWidth,
-    double? iouThreshold,
-    double? confThreshold,
-    double? classThreshold,
-  }) async {
-    return MlObjectDetectionPlatform.instance.onFrame(
-      bytesList: bytesList,
-      imageHeight: imageHeight,
-      imageWidth: imageWidth,
-      iouThreshold: iouThreshold,
-      confThreshold: confThreshold,
-      classThreshold: classThreshold,
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> onImage({
-    required Uint8List bytesList,
-    required int imageHeight,
-    required int imageWidth,
-    double? iouThreshold,
-    double? confThreshold,
-    double? classThreshold,
-  }) async {
-    return MlObjectDetectionPlatform.instance.onImage(
-      bytesList: bytesList,
-      imageHeight: imageHeight,
-      imageWidth: imageWidth,
-      iouThreshold: iouThreshold,
-      confThreshold: confThreshold,
-      classThreshold: classThreshold,
-    );
-  }
-
-  Future<void> closeModel() async {
-    return MlObjectDetectionPlatform.instance.closeModel();
+  Future<void> deinit() async {
+    return MlObjectDetectionPlatform.instance.deinit();
   }
 }

@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:camera/camera.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
 import 'package:ml_object_detection/ml_object_detection.dart';
+import 'package:ml_object_detection_example/app/app_assembly.dart';
 
 abstract interface class VideoDetectionEvent {}
 
@@ -31,13 +31,18 @@ class InitErrorState extends VideoDetectionState {}
 
 class DetectCompleteState extends VideoDetectionState {
   final List<Map<String, dynamic>> result;
+  final int previewWidth;
+  final int previewHeight;
 
-  DetectCompleteState(this.result);
+  DetectCompleteState({
+    required this.result,
+    required this.previewWidth,
+    required this.previewHeight,
+  });
 }
 
 class VideoDetectionBloc
     extends Bloc<VideoDetectionEvent, VideoDetectionState> {
-  late final CameraController _cameraController;
   final _logger = Logger('VideoDetectionBloc');
   final MlObjectDetection _mlObjectDetection;
 
@@ -49,9 +54,7 @@ class VideoDetectionBloc
   @override
   Future<void> close() async {
     await super.close();
-    await _mlObjectDetection.closeModel();
-    await _cameraController.stopImageStream();
-    await _cameraController.dispose();
+    await _mlObjectDetection.deinit();
   }
 
   int _counter = 0;
@@ -63,65 +66,31 @@ class VideoDetectionBloc
     try {
       emit(InitPendingState());
 
-      await _mlObjectDetection.loadModel(
-        labels: 'assets/labels.txt',
+      final textureId = await _mlObjectDetection.init(
+        classesPath: 'assets/labels.txt',
         modelPath: 'assets/yolov8n.tflite',
+        previewWidth: AppAssembly.previewWidth,
+        previewHeight: AppAssembly.previewHeight,
         numThreads: 2,
         useGpu: true,
       );
 
-      final textureId = await _mlObjectDetection.getTextureId();
+      _mlObjectDetection.detections().listen(
+        (results) {
+          if (results.isNotEmpty) {
+            _logger.fine('event ${results.first}');
+          }
 
-      // final cameras = await availableCameras();
-      // _cameraController = CameraController(
-      //   cameras[0],
-      //   ResolutionPreset.high,
-      //   enableAudio: false,
-      // );
-      // await _cameraController.initialize();
-      //
-      // _logger.fine(
-      //     'Camera is initialized. CameraController.value ${_cameraController.value}');
-      //
-      // _cameraController.startImageStream(
-      //   (cameraImage) async {
-      //     final stopwatch = Stopwatch()..start();
-      //     final results = await _mlObjectDetection.onFrame(
-      //       bytesList: cameraImage.planes.map((plane) => plane.bytes).toList(),
-      //       imageHeight: cameraImage.height,
-      //       imageWidth: cameraImage.width,
-      //       iouThreshold: 0.4,
-      //       confThreshold: 0.4,
-      //       classThreshold: 0.5,
-      //     );
-      //
-      //     stopwatch.stop();
-      //     if (results.isNotEmpty) {
-      //       _counter = 0;
-      //       String logMessage = 'elapsed ${stopwatch.elapsed.inMilliseconds} ';
-      //       for(final concreteResult in results) {
-      //         logMessage = '${logMessage}result: tag ${concreteResult['tag']}, confidence ${(concreteResult['box'][4] * 100).toStringAsFixed(0)} ';
-      //       }
-      //       _logger.fine(logMessage);
-      //     }
-      //
-      //     if (results.isEmpty) {
-      //       _counter++;
-      //     }
-      //
-      //     if (!isClosed && (results.isNotEmpty || _counter > 20)) {
-      //       _counter = 0;
-      //       add(DetectCompleteEvent(results, cameraImage));
-      //     }
-      //   },
-      // );
+          if (results.isEmpty) {
+            _counter++;
+          }
 
-      _mlObjectDetection.objectDetectionResult().listen((event) {
-        if (event.isNotEmpty) {
-          _logger.fine('event ${event.first}');
-        }
-        add(DetectCompleteEvent(event));
-      });
+          if (!isClosed && (results.isNotEmpty || _counter > 3)) {
+            _counter = 0;
+            add(DetectCompleteEvent(results));
+          }
+        },
+      );
 
       emit(InitCompleteState(textureId));
     } catch (error, stackTrace) {
@@ -134,6 +103,12 @@ class VideoDetectionBloc
     DetectCompleteEvent event,
     Emitter<VideoDetectionState> emit,
   ) async {
-    emit(DetectCompleteState(event.result));
+    // Здесь height и width передаются в таком порядке, т.к. см как камера
+    // возвращает превью в андроид
+    emit(DetectCompleteState(
+      result: event.result,
+      previewWidth: AppAssembly.previewHeight,
+      previewHeight: AppAssembly.previewWidth,
+    ));
   }
 }

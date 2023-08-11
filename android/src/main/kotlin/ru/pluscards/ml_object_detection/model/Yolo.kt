@@ -24,8 +24,7 @@ open class Yolo(
     private val isAssets: Boolean,
     private val numThreads: Int,
     private val useGpu: Boolean,
-    private val labelPath: String,
-    protected val rotation: Int
+    private val labelPath: String
 ) {
     private var output: Array<Array<FloatArray>>? = null
     private var interpreter: Interpreter? = null

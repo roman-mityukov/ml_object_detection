@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-enum HomeRoute { image, video }
+enum HomeRoute { video }
 
 abstract interface class HomeEvent {}
 
@@ -37,7 +37,7 @@ class NavigateToDestinationState extends HomeState {
 }
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc() : super(IdleHomeState(const [HomeRoute.video])) {
+  HomeBloc() : super(IdleHomeState(HomeRoute.values)) {
     on<SelectRouteEvent>(_onSelectRouteEvent);
   }
 

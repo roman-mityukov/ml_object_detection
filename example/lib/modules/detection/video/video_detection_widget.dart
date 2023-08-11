@@ -1,4 +1,3 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
@@ -45,9 +44,7 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
             InitCompleteState() => Stack(
                 fit: StackFit.expand,
                 children: [
-                  ColoredBox(color: Colors.red),
                   MlPreviewWidget(state.textureId),
-
                   BlocBuilder<VideoDetectionBloc, VideoDetectionState>(
                     buildWhen: (previous, current) {
                       return current is DetectCompleteState;
@@ -58,6 +55,8 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
                           return Stack(
                             children: _displayBoxesAroundRecognizedObjects(
                               Size(constraints.maxWidth, constraints.maxHeight),
+                              state.previewWidth,
+                              state.previewHeight,
                               state.result,
                             ),
                           );
@@ -80,11 +79,13 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
 
   List<Widget> _displayBoxesAroundRecognizedObjects(
     Size size,
+    int previewWidth,
+    int previewHeight,
     List<Map<String, dynamic>> result,
   ) {
     if (result.isEmpty) return [];
-    double factorX = size.width / (1920);
-    double factorY = size.height / (1080);
+    double factorX = size.width / previewWidth;
+    double factorY = size.height / previewHeight;
 
     Color colorPick = const Color.fromARGB(255, 50, 233, 30);
 

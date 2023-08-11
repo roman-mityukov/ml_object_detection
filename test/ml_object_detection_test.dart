@@ -11,13 +11,13 @@ class MockMlObjectDetectionPlatform
     implements MlObjectDetectionPlatform {
 
   @override
-  Future<void> closeModel() {
+  Future<void> deinit() {
     // TODO: implement closeModel
     throw UnimplementedError();
   }
 
   @override
-  Future<void> loadModel({required String modelPath, required String labels, int? numThreads, bool? useGpu}) {
+  Future<void> init({required String modelPath, required String classesPath, int? numThreads, bool? useGpu}) {
     // TODO: implement loadModel
     throw UnimplementedError();
   }
