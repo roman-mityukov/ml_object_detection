@@ -51,6 +51,14 @@ android {
         implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.13.0'
         implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
         implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.13.0'
+
+        //AXR SDK
+        def axr = "1.0.4"
+        //This SDK provide ROKID Glass device usage. And also is the base sdk for camera and voice.
+        implementation "com.rokid.axr:glassdevice-phone:$axr"
+        //This SDK is based on glassdevice-phone sdk, provide camera usage.
+        implementation "com.rokid.axr:glasscamera-phone:$axr"
+
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.1.1'
     }

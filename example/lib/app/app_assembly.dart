@@ -1,4 +1,4 @@
 class AppAssembly {
-  static const previewWidth = 1280;
-  static const previewHeight = 720;
+  static const previewWidth = 1920;
+  static const previewHeight = 1080;
 }

@@ -5,8 +5,8 @@ package ru.pluscards.ml_object_detection
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.graphics.SurfaceTexture
+import android.hardware.usb.UsbManager
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -19,6 +19,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import ru.pluscards.ml_object_detection.camera.CameraService
+import ru.pluscards.ml_object_detection.camera.GlassesCameraService
+import ru.pluscards.ml_object_detection.camera.PhoneCameraService
 import ru.pluscards.ml_object_detection.model.Yolo
 import ru.pluscards.ml_object_detection.model.Yolov8
 import ru.pluscards.ml_object_detection.utils.Utils
@@ -27,7 +29,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /** MlObjectDetectionPlugin */
-class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler, ActivityAware {
+class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler,
+    ActivityAware {
     companion object {
         val TAG = "MlObjectDetectionPlugin"
     }
@@ -86,7 +89,8 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
 
                     val labelPath = assets!!.getAssetFilePathByName(args["classes_path"].toString())
                     val modelPath = assets!!.getAssetFilePathByName(args["model_path"].toString())
-                    val isAsset = if (args["is_asset"] == null) false else args["is_asset"] as Boolean
+                    val isAsset =
+                        if (args["is_asset"] == null) false else args["is_asset"] as Boolean
                     val previewWidth = args["preview_width"] as Int
                     val previewHeight = args["preview_height"] as Int
                     val numThreads = args["num_threads"] as Int
@@ -102,23 +106,21 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                     )
                     yolo!!.initModel()
 
-                    cameraService = CameraService(context!!, previewWidth, previewHeight, surfaceTexture, activityPluginBinding!!) {
+                    val callback: (bytes: ByteArray) -> Unit = {
                         if (!isDetecting) {
-                            val buffer = it.planes[0].buffer
-                            val bytes = ByteArray(buffer.capacity())
-                            buffer.get(bytes)
-                            var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
-                            val matrix = Matrix()
-                            matrix.postRotate(90f)
-                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-//                        val path = "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
-//                        File(path).mkdir()
-//                        val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
-//                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+                            var bitmap = BitmapFactory.decodeByteArray(it, 0, it.size, null)
+//                            val matrix = Matrix()
+//                            matrix.postRotate(90f)
+//                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+//                            val path =
+//                                "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
+//                            File(path).mkdir()
+//                            val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
+//                            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
 
                             isDetecting = true
-                            //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
                             val detectionTask = DetectionTask(yolo!!, bitmap) {
                                 val handler = Handler(Looper.getMainLooper())
                                 handler.post {
@@ -128,7 +130,60 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                             }
                             executor!!.submit(detectionTask)
                         }
+
+//                        if (!isDetecting) {
+//                            val buffer = it.planes[0].buffer
+//                            val bytes = ByteArray(buffer.capacity())
+//                            buffer.get(bytes)
+//                            var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+//                            val matrix = Matrix()
+//                            matrix.postRotate(90f)
+//                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+//
+////                        val path = "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
+////                        File(path).mkdir()
+////                        val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
+////                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+//
+//                            isDetecting = true
+//                            //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
+//                            val detectionTask = DetectionTask(yolo!!, bitmap) {
+//                                val handler = Handler(Looper.getMainLooper())
+//                                handler.post {
+//                                    isDetecting = false
+//                                    eventSink?.success(it)
+//                                }
+//                            }
+//                            executor!!.submit(detectionTask)
+//                        }
                     }
+
+                    val manager = context!!.getSystemService(Context.USB_SERVICE) as UsbManager
+                    val deviceList = manager.getDeviceList()
+
+
+                    if (deviceList.isNotEmpty() && deviceList.values.any {
+                            it.manufacturerName?.lowercase()?.contains("rokid") == true
+                        }) {
+                        cameraService = GlassesCameraService(
+                            context!!,
+                            previewWidth,
+                            previewHeight,
+                            surfaceTexture,
+                            activityPluginBinding!!,
+                            callback
+                        )
+                    } else {
+                        cameraService = PhoneCameraService(
+                            context!!,
+                            previewWidth,
+                            previewHeight,
+                            surfaceTexture,
+                            activityPluginBinding!!,
+                            callback
+                        )
+                    }
+
                     cameraService.init()
 
                     result.success(textureId)

@@ -24,9 +24,6 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Video'),
-      ),
       body: BlocBuilder<VideoDetectionBloc, VideoDetectionState>(
         buildWhen: (previous, current) {
           return current is IdleState ||

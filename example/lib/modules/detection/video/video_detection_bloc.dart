@@ -67,8 +67,8 @@ class VideoDetectionBloc
       emit(InitPendingState());
 
       final textureId = await _mlObjectDetection.init(
-        classesPath: 'assets/labels.txt',
-        modelPath: 'assets/yolov8n.tflite',
+        classesPath: 'assets/classes.txt',
+        modelPath: 'assets/model_test_3_float16.tflite',
         previewWidth: AppAssembly.previewWidth,
         previewHeight: AppAssembly.previewHeight,
         numThreads: 2,
@@ -107,8 +107,8 @@ class VideoDetectionBloc
     // возвращает превью в андроид
     emit(DetectCompleteState(
       result: event.result,
-      previewWidth: AppAssembly.previewHeight,
-      previewHeight: AppAssembly.previewWidth,
+      previewWidth: AppAssembly.previewWidth,
+      previewHeight: AppAssembly.previewHeight,
     ));
   }
 }
