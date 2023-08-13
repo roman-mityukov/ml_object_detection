@@ -241,6 +241,7 @@ open class Yolo(
 
     fun close() {
         if (interpreter != null) interpreter!!.close()
+        interpreter = null
     }
 
     companion object {

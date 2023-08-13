@@ -77,6 +77,10 @@ class PhoneCameraService (
         }
     }
 
+    override fun close() {
+        closeCamera()
+    }
+
     private val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
             Log.d(TAG, "onOpened")

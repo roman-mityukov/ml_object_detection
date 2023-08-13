@@ -2,6 +2,17 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'ml_object_detection_method_channel.dart';
 
+enum CameraProvider {
+  glasses, phone
+}
+
+class EnvironmentInfo {
+  final int textureId;
+  final CameraProvider cameraProvider;
+
+  EnvironmentInfo(this.textureId, this.cameraProvider);
+}
+
 abstract class MlObjectDetectionPlatform extends PlatformInterface {
   /// Constructs a MlObjectDetectionPlatform.
   MlObjectDetectionPlatform() : super(token: _token);
@@ -31,7 +42,7 @@ abstract class MlObjectDetectionPlatform extends PlatformInterface {
   /// ,[labelsPath] - path to the labels file
   /// ,[numThreads] - number of threads to use for inference
   /// ,[useGPU] - use GPU for inference
-  Future<int> init({
+  Future<EnvironmentInfo> init({
     required String modelPath,
     required String classesPath,
     required int previewWidth,

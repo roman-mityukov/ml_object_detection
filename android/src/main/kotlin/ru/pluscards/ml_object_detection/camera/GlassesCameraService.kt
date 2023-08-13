@@ -8,7 +8,6 @@ import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.graphics.YuvImage
 import android.hardware.usb.UsbDevice
-import android.os.PowerManager
 import android.util.Log
 import android.view.Surface
 import androidx.core.app.ActivityCompat
@@ -35,13 +34,17 @@ class GlassesCameraService(
 
     override fun init() {
         try {
-            val attr = activityPluginBinding.activity.window.attributes
-            attr.screenBrightness = 0.1f
-            activityPluginBinding.activity.window.attributes = attr
             RKGlassDevice.getInstance().init(deviceConnectionListener)
         } catch (e: Exception) {
             Log.d(TAG, "init error")
         }
+    }
+
+    override fun close() {
+        stopPreview()
+        RKGlassCamera.getInstance().closeCamera()
+        RKGlassCamera.getInstance().deInit()
+        RKGlassDevice.getInstance().deInit()
     }
 
     private fun initCamera() {

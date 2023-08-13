@@ -66,9 +66,9 @@ class VideoDetectionBloc
     try {
       emit(InitPendingState());
 
-      final textureId = await _mlObjectDetection.init(
-        classesPath: 'assets/classes.txt',
-        modelPath: 'assets/model_test_3_float16.tflite',
+      final environmentInfo = await _mlObjectDetection.init(
+        classesPath: 'assets/labels.txt',
+        modelPath: 'assets/yolov8n.tflite',
         previewWidth: AppAssembly.previewWidth,
         previewHeight: AppAssembly.previewHeight,
         numThreads: 2,
@@ -92,7 +92,7 @@ class VideoDetectionBloc
         },
       );
 
-      emit(InitCompleteState(textureId));
+      emit(InitCompleteState(environmentInfo.textureId));
     } catch (error, stackTrace) {
       _logger.warning('Init error', error, stackTrace);
       emit(InitErrorState());

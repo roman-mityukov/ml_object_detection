@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
+import 'package:ml_object_detection/ml_object_detection.dart';
 import 'package:ml_object_detection/ml_preview_widget.dart';
 import 'package:ml_object_detection_example/modules/detection/video/video_detection_bloc.dart';
 
@@ -41,7 +42,7 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
             InitCompleteState() => Stack(
                 fit: StackFit.expand,
                 children: [
-                  MlPreviewWidget(state.textureId),
+                  context.read<MlObjectDetection>().buildPreview(),
                   BlocBuilder<VideoDetectionBloc, VideoDetectionState>(
                     buildWhen: (previous, current) {
                       return current is DetectCompleteState;

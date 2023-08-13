@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import ru.pluscards.ml_object_detection.camera.CameraService
+import ru.pluscards.ml_object_detection.camera.CameraProvider
 import ru.pluscards.ml_object_detection.camera.GlassesCameraService
 import ru.pluscards.ml_object_detection.camera.PhoneCameraService
 import ru.pluscards.ml_object_detection.model.Yolo
@@ -53,7 +54,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
     private var eventChannel: EventChannel? = null
     private var eventSink: EventChannel.EventSink? = null
 
-    private lateinit var cameraService: CameraService
+    private var cameraService: CameraService? = null
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         this.eventSink = events
@@ -80,6 +81,8 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         context = flutterPluginBinding.applicationContext
         executor = Executors.newSingleThreadExecutor()
     }
+
+    var isDeinitCalled: Boolean = false
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
@@ -109,16 +112,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                     val callback: (bytes: ByteArray) -> Unit = {
                         if (!isDetecting) {
 
-                            var bitmap = BitmapFactory.decodeByteArray(it, 0, it.size, null)
-//                            val matrix = Matrix()
-//                            matrix.postRotate(90f)
-//                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-
-//                            val path =
-//                                "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
-//                            File(path).mkdir()
-//                            val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
-//                            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+                            val bitmap = BitmapFactory.decodeByteArray(it, 0, it.size, null)
 
                             isDetecting = true
                             val detectionTask = DetectionTask(yolo!!, bitmap) {
@@ -126,45 +120,24 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                                 handler.post {
                                     isDetecting = false
                                     eventSink?.success(it)
+                                    handlePendingDeinit()
                                 }
                             }
                             executor!!.submit(detectionTask)
                         }
-
-//                        if (!isDetecting) {
-//                            val buffer = it.planes[0].buffer
-//                            val bytes = ByteArray(buffer.capacity())
-//                            buffer.get(bytes)
-//                            var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
-//                            val matrix = Matrix()
-//                            matrix.postRotate(90f)
-//                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-//
-////                        val path = "${context!!.getExternalFilesDir(null)}${File.pathSeparator}Snapshots"
-////                        File(path).mkdir()
-////                        val fos = FileOutputStream("${path}${File.pathSeparator}image.jpg")
-////                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
-//
-//                            isDetecting = true
-//                            //Log.d(TAG, "Start detecting bitmap.width ${bitmap.width}, bitmap.height ${bitmap.height}")
-//                            val detectionTask = DetectionTask(yolo!!, bitmap) {
-//                                val handler = Handler(Looper.getMainLooper())
-//                                handler.post {
-//                                    isDetecting = false
-//                                    eventSink?.success(it)
-//                                }
-//                            }
-//                            executor!!.submit(detectionTask)
-//                        }
                     }
 
-                    val manager = context!!.getSystemService(Context.USB_SERVICE) as UsbManager
-                    val deviceList = manager.getDeviceList()
-
-
-                    if (deviceList.isNotEmpty() && deviceList.values.any {
+                    val usbManager = context!!.getSystemService(Context.USB_SERVICE) as UsbManager
+                    val usbDeviceHashMap = usbManager.deviceList
+                    val cameraProvider = if (usbDeviceHashMap.values.any {
                             it.manufacturerName?.lowercase()?.contains("rokid") == true
                         }) {
+                        CameraProvider.glasses
+                    } else {
+                        CameraProvider.phone
+                    }
+
+                    if (cameraProvider == CameraProvider.glasses) {
                         cameraService = GlassesCameraService(
                             context!!,
                             previewWidth,
@@ -184,24 +157,50 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
                         )
                     }
 
-                    cameraService.init()
+                    cameraService!!.init()
 
-                    result.success(textureId)
+                    result.success(
+                        mapOf(
+                            Pair(first = "textureId", second = textureId),
+                            Pair(first = "cameraProvider", second = cameraProvider.name)
+                        )
+                    )
                 } catch (e: Exception) {
                     result.error("100", "Error on plugin initialization", e)
                 }
             }
 
             "deinit" -> {
-                try {
-                    yolo!!.close()
-                    result.success("Yolo model closed succesfully")
-                } catch (e: java.lang.Exception) {
-                    result.error("100", "Close_yolo_model error", e)
-                }
+                close(result)
             }
 
             else -> result.notImplemented()
+        }
+    }
+
+    private var pendingDeinitResult: Result? = null
+
+    private fun handlePendingDeinit() {
+        if (isDeinitCalled) {
+            close(pendingDeinitResult)
+            isDeinitCalled = false
+            pendingDeinitResult = null
+        }
+    }
+
+    private fun close(result: Result?) {
+        try {
+            if (!isDetecting) {
+                yolo!!.close()
+                yolo = null
+                cameraService?.close()
+                result?.success("Yolo model closed succesfully")
+            } else {
+                isDeinitCalled = true
+                pendingDeinitResult = result
+            }
+        } catch (e: java.lang.Exception) {
+            result?.error("100", "Close_yolo_model error", e)
         }
     }
 

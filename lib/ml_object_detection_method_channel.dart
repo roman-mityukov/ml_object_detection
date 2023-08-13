@@ -30,7 +30,7 @@ class MethodChannelMlObjectDetection extends MlObjectDetectionPlatform {
   }
 
   @override
-  Future<int> init({
+  Future<EnvironmentInfo> init({
     required String modelPath,
     required String classesPath,
     required int previewWidth,
@@ -38,7 +38,7 @@ class MethodChannelMlObjectDetection extends MlObjectDetectionPlatform {
     int? numThreads,
     bool? useGpu,
   }) async {
-    return (await methodChannel.invokeMethod<int>(
+    final result = (await methodChannel.invokeMethod<Map<Object?, Object?>>(
       'init',
       {
         'model_path': modelPath,
@@ -50,6 +50,12 @@ class MethodChannelMlObjectDetection extends MlObjectDetectionPlatform {
         'use_gpu': useGpu ?? false,
       },
     ))!;
+
+    return EnvironmentInfo(
+      result['textureId'] as int,
+      CameraProvider.values.firstWhere(
+          (element) => element.name == result['cameraProvider'] as String),
+    );
   }
 
   @override
