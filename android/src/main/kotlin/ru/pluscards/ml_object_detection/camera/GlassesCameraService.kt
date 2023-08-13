@@ -10,6 +10,7 @@ import android.graphics.YuvImage
 import android.hardware.usb.UsbDevice
 import android.util.Log
 import android.view.Surface
+import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import com.rokid.axr.phone.glasscamera.RKGlassCamera
 import com.rokid.axr.phone.glasscamera.RKGlassCamera.RokidCameraCallback
@@ -34,6 +35,7 @@ class GlassesCameraService(
 
     override fun init() {
         try {
+            activityPluginBinding.activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             RKGlassDevice.getInstance().init(deviceConnectionListener)
         } catch (e: Exception) {
             Log.d(TAG, "init error")
@@ -45,6 +47,7 @@ class GlassesCameraService(
         RKGlassCamera.getInstance().closeCamera()
         RKGlassCamera.getInstance().deInit()
         RKGlassDevice.getInstance().deInit()
+        activityPluginBinding.activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun initCamera() {

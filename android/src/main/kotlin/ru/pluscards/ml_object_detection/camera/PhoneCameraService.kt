@@ -13,6 +13,7 @@ import android.hardware.camera2.CaptureRequest
 import android.media.ImageReader
 import android.util.Log
 import android.view.Surface
+import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 
@@ -30,11 +31,13 @@ class PhoneCameraService (
     private lateinit var previewRequest: CaptureRequest
 
     companion object {
-        const val TAG = "CameraService"
+        const val TAG = "PhoneCameraService"
         const val permissionRequestCode = 4321
     }
 
     override fun init() {
+        activityPluginBinding.activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         val cameraManager =
             context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
@@ -79,6 +82,7 @@ class PhoneCameraService (
 
     override fun close() {
         closeCamera()
+        activityPluginBinding.activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private val cameraStateCallback = object : CameraDevice.StateCallback() {
