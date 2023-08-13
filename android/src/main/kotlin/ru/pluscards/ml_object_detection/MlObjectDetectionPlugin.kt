@@ -88,6 +88,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
         when (call.method) {
             "init" -> {
                 try {
+                    isDetecting = false
                     val args = call.arguments as Map<String, Any>
 
                     val labelPath = assets!!.getAssetFilePathByName(args["classes_path"].toString())
@@ -185,6 +186,7 @@ class MlObjectDetectionPlugin : FlutterPlugin, MethodCallHandler, EventChannel.S
             close(pendingDeinitResult)
             isDeinitCalled = false
             pendingDeinitResult = null
+            isDetecting = false
         }
     }
 
