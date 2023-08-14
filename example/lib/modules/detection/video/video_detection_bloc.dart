@@ -67,8 +67,8 @@ class VideoDetectionBloc
       emit(InitPendingState());
 
       final environmentInfo = await _mlObjectDetection.init(
-        classesPath: 'assets/labels.txt',
-        modelPath: 'assets/yolov8n.tflite',
+        classesPath: 'assets/classes.txt',
+        modelPath: 'assets/model_v8_float16.tflite',
         previewWidth: AppAssembly.previewWidth,
         previewHeight: AppAssembly.previewHeight,
         numThreads: 2,

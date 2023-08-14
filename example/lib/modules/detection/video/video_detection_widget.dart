@@ -96,22 +96,28 @@ class _VideoDetectionWidgetState extends State<VideoDetectionWidget> {
 
       return Positioned(
         left: left,
-        top: top,
-        width: width,
-        height: height,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(10.0)),
-            border: Border.all(color: Colors.pink, width: 2.0),
-          ),
-          child: Text(
-            "$label ${(result['box'][4] * 100).toStringAsFixed(0)}%",
-            style: TextStyle(
-              background: Paint()..color = colorPick,
-              color: Colors.white,
-              fontSize: 18.0,
+        top: top - 14,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "$label ${(result['box'][4] * 100).toStringAsFixed(0)}%",
+              style: TextStyle(
+                background: Paint()..color = colorPick,
+                color: Colors.white,
+                fontSize: 12.0,
+              ),
             ),
-          ),
+            SizedBox(
+              width: width,
+              height: height,
+              child: Container(
+                  decoration: BoxDecoration(
+                border: Border.all(color: colorPick, width: 1.0),
+              )),
+            ),
+          ],
         ),
       );
     }).toList();
